@@ -502,7 +502,7 @@ int main(int argc, char* argv[])
 #endif // _MSC_VER
 {
   #ifdef _MSC_VER
-    setlocale(LC_ALL, ".65001");  // utf8 
+    setlocale(LC_ALL, ".65001");  // utf8, mostly for fopen to work
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
     SetLastError(NO_ERROR);  // Some code assumes no error by default, which is not always true
@@ -639,6 +639,42 @@ int64_t parseInt64UntilEnd(const char* c, const char* context, int too_big_error
   const char* x = c;
   return parseInt64(x, context, too_big_error_code);
 }
+
+#ifdef _MSC_VER
+
+#define WIN_MAX_PATH 32767 // real Windows max path, see https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamew
+#define WIN_MAX_PATH_PREFIX L"\\\\?\\"
+#define WIN_MAX_PATH_PREFIX_CHAR "\\\\?\\"
+// Windows support file path up to 32767 wide chars. But! Only if path is absolute and with '\\?\' prefix
+char * absolutePath(const char* path){
+  const size_t wide_path_len = MultiByteToWideChar(CP_UTF8, 0, path, -1, nullptr, 0);
+  wchar_t * wide_path = new wchar_t[wide_path_len];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, wide_path, wide_path_len);
+
+  wchar_t wide_full_path[WIN_MAX_PATH]; 
+  GetFullPathName(wide_path, WIN_MAX_PATH, wide_full_path, nullptr);
+  delete[] wide_path;
+
+  const DWORD errcode = GetLastError();
+  if (errcode != NO_ERROR) {
+    printf("ERROR: Could not get absolute path to file %s\n", path);
+    printf("errcode: %lu\n", errcode);
+    exit(1);
+  }
+  const size_t utf8_path_len = WideCharToMultiByte(CP_UTF8, 0, wide_full_path, -1, nullptr, 0, nullptr, nullptr );
+  char * abs_path;
+  if(utf8_path_len >= (sizeof(WIN_MAX_PATH_PREFIX) - 1) && wcsncmp(wide_full_path, WIN_MAX_PATH_PREFIX, sizeof(WIN_MAX_PATH_PREFIX) - 1) == 0){
+    abs_path = new char[utf8_path_len];
+    WideCharToMultiByte(CP_UTF8, 0, wide_full_path, -1, abs_path, utf8_path_len, nullptr, nullptr);
+  }
+  else {
+    abs_path = new char[utf8_path_len + sizeof(WIN_MAX_PATH_PREFIX_CHAR) - 1];
+    strcpy(input_file_name, WIN_MAX_PATH_PREFIX_CHAR);
+    WideCharToMultiByte(CP_UTF8, 0, wide_full_path, -1, abs_path  + sizeof(WIN_MAX_PATH_PREFIX_CHAR) - 1, utf8_path_len, nullptr, nullptr);
+  }
+  return abs_path;
+}
+#endif
 
 #ifndef PRECOMPDLL
 #ifndef COMFORT
@@ -1155,10 +1191,14 @@ int init(int argc, char* argv[]) {
 
       input_file_given = true;
       input_file_name = argv[i];
+      
+      #ifdef _MSC_VER
+        input_file_name = absolutePath(input_file_name);
+      #endif
+      
+      fin_length = fileSize64(input_file_name);
 
-      fin_length = fileSize64(argv[i]);
-
-      fin = fopen(argv[i],"rb");
+      fin = fopen(input_file_name,"rb");
       if (fin == NULL) {
         printf("ERROR: Input file \"%s\" doesn't exist\n", input_file_name);
 
@@ -1264,6 +1304,9 @@ int init(int argc, char* argv[]) {
 
     exit(1);
   } else {
+    #ifdef _MSC_VER
+      output_file_name = absolutePath(output_file_name);
+    #endif
     if (operation == P_DECOMPRESS) {
       // if .pcf was appended, remove it
       if (appended_pcf) {
