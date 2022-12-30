@@ -99,10 +99,10 @@ include_directories(AFTER "${SRCDIR}" "${SRCDIR}/contrib/liblzma"
                           "${SRCDIR}/contrib/liblzma/lzma" "${SRCDIR}/contrib/liblzma/rangecoder"
                           "${SRCDIR}/contrib/liblzma/simple")
 add_definitions(-DHAVE_BOOL)
-if (MSVC)
+if (MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
   include_directories(AFTER "msinttypes")
   add_definitions(-D_UNICODE -DUNICODE)
-endif (MSVC)
+endif (MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
 
 set(BRUNSLI_SRC "")
 add_stem2file(BRUNSLI_SRC "${SRCDIR}/contrib/brunsli/c/common/%STEM%.cc"
