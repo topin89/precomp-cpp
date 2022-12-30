@@ -495,9 +495,26 @@ DLL bool file_precompressable(char* in, char* msg) {
 }
 
 #else
-
+#ifdef _MSC_VER
+int wmain(int argc, wchar_t * wargv[])
+#else
 int main(int argc, char* argv[])
+#endif // _MSC_VER
 {
+  #ifdef _MSC_VER
+    setlocale(LC_ALL, ".65001");  // utf8 
+    SetConsoleCP(CP_UTF8);
+    SetConsoleOutputCP(CP_UTF8);
+    SetLastError(NO_ERROR);  // Some code assumes no error by default, which is not always true
+
+    char ** argv = new char*[argc];
+    for(int i=0; i < argc; ++i){
+      const size_t new_wchar_len = WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, nullptr, 0, nullptr, nullptr );
+      argv[i] = new char[new_wchar_len];
+      WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, argv[i], new_wchar_len, nullptr, nullptr);
+    }
+  #endif // _MSC_VER
+
   int return_errorlevel = 0;
 
   // register CTRL-C handler
